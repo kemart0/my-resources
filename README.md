@@ -1,8 +1,8 @@
 # my-resources
 full of resources!
 
-##R
+## R
 
-##Python
+## Python
 
-##Other
+## Other
