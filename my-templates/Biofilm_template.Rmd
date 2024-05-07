@@ -1,0 +1,204 @@
+---
+title: "OZ_Biofilm_analysistemplate"
+author: "Kelsey Martin"
+date: "2024-05-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Load the libraries
+
+```{r}
+library(tidyverse)
+
+```
+
+## Load the data
+
+```{r}
+#CSV file from plate reading at A562, labeled with drug and concentration in uM
+mabs_smooth_OZ1<- read.csv()
+mabs_smooth_OZ2<- read.csv()
+mabs_rough_OZ1<-read.csv()
+mabs_rough_OZ2<-read.csv()
+
+#join files of the same strain
+#check first that all the columns are named the same
+
+if(identical(colnames(mabs_smooth_OZ1), colnames(mabs_smooth_OZ2)) & identical(sapply(mabs_smooth_OZ1, class), sapply(mabs_smooth_OZ2, class))) {
+  # If column names and types are identical, then append the rows
+  mabs_smooth_OZ <- rbind(mabs_smooth_OZ1, mabs_smooth_OZ2)
+} else {
+  # If column names or types are not identical, provide a warning or handle accordingly
+  warning("Column names or types are not identical. Please verify before combining.")
+}
+
+if(identical(colnames(mabs_rough_OZ1), colnames(mabs_rough_OZ2)) & identical(sapply(mabs_rough_OZ1, class), sapply(mabs_rough_OZ2, class))) {
+  # If column names and types are identical, then append the rows
+  mabs_rough_OZ<- rbind(mabs_rough_OZ1, mabs_rough_OZ2)
+} else 
+  # If column names or types are not identical, provide a warning or handle accordingly
+  warning("Column names or types are not identical. Please verify before combining.")
+
+```
+
+## Subtract the blanks
+```{r}
+#the plates each have a row of uninfected that is just the media, so I want to subtract it from the absorbance values
+#this is the 'uninf' group
+mean_blank_s<- mabs_smooth_OZ %>% 
+  filter(Drug=="uninf") %>% 
+  select(Absorbance_562) %>% 
+  summarize(mean_blank=mean(Absorbance_562))
+mean_blank_s
+mean_blank_r<- mabs_rough_OZ %>% 
+  filter(Drug=="uninf") %>% 
+  select(Absorbance_562) %>% 
+  summarize(mean_blank=mean(Absorbance_562))
+mean_blank_r
+
+#subtracting based on these values to make a normalized A562 column
+mabs_smooth_OZ<-mabs_smooth_OZ %>% 
+  mutate(Absorbance_562_normalized=Absorbance_562-0.08045833)
+mabs_rough_OZ<-mabs_rough_OZ %>% 
+  mutate(Absorbance_562_normalized=Absorbance_562-0.07383333)
+
+  
+```
+
+## Summary Statistics of the data based on drug and concentration
+
+```{r}
+summary_mabs_smooth<- mabs_smooth_OZ %>% 
+  group_by(Drug, Concentration_uM) %>% 
+  summarize(mean_A562=mean(Absorbance_562_normalized), sd_A562=sd(Absorbance_562_normalized))
+summary_mabs_rough<- mabs_rough_OZ %>% 
+  group_by(Drug, Concentration_uM) %>% 
+  summarize(mean_A562=mean(Absorbance_562_normalized), sd_A562=sd(Absorbance_562_normalized))
+
+```
+## Time for plots!!
+
+```{r}
+#load the plot libraries
+library(ggplot2)
+library(ggthemes)
+```
+
+First, a facet plot from the summary data
+```{r}
+summary_mabs_smooth %>% filter(Drug != "uninf") %>% 
+ggplot( aes(x = as.factor(Concentration_uM), y = mean_A562, fill = Drug)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = mean_A562 - sd_A562, ymax = mean_A562 + sd_A562),
+                width = 0.2, position = position_dodge(0.9)) +
+  facet_wrap(~Drug, scales = "free") +
+  theme_few() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate x-axis labels
+labs(title = bquote("Effect of Ozonide Drug Treatment on Biofilm Formation in Smooth "~italic("M.abscessus")),
+       x = "Concentration (uM)",
+       y= "Mean Absorbance at 562nm")
+
+ggsave("smooth_biofilm_faceted.png", width=8, height=6)
+
+```
+and again for Rough Morphotype
+```{r}
+summary_mabs_rough %>% filter(Drug != "uninf") %>% 
+ggplot( aes(x = as.factor(Concentration_uM), y = mean_A562, fill = Drug)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = mean_A562 - sd_A562, ymax = mean_A562 + sd_A562),
+                width = 0.2, position = position_dodge(0.9)) +
+  facet_wrap(~Drug, scales = "free") +
+  theme_few() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate x-axis labels
+labs(title = bquote("Effect of Ozonide Drug Treatment on Biofilm Formation in Rough "~italic("M.abscessus")),
+       x = "Concentration (uM)",
+       y= "Mean Absorbance at 562nm")
+
+ggsave("rough_biofilm_faceted.png",width = 8, height = 6, units = "in")
+```
+
+
+Now I want individual graphs for each that will be saved as a PNG.
+```{r}
+# Filter the data
+filtered_data <- summary_mabs_smooth %>% 
+  filter(Drug != "uninf")
+
+# Get unique drugs
+unique_drugs <- unique(filtered_data$Drug)
+
+# Define a color palette with a different color for each drug
+drug_colors <- scales::hue_pal()(length(unique_drugs))
+
+# Create a Loop to generate individual plots for each drug
+for (i in seq_along(unique_drugs)) {
+  drug <- unique_drugs[i]  # Get the current drug
+  
+  # Subset data: select one of the drugs to make a plot for
+  drug_data <- filtered_data %>% 
+    filter(Drug == drug)
+  
+  # Plot for the current drug
+  p <- ggplot(drug_data, aes(x = as.factor(Concentration_uM), y = mean_A562, fill = Drug)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_errorbar(aes(ymin = mean_A562 - sd_A562, ymax = mean_A562 + sd_A562),
+                  width = 0.2, position = position_dodge(0.9)) +
+    facet_wrap(~Drug, scales = "free") +
+    theme_few() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = bquote("Effect of Ozonide Drug Treatment on Biofilm Formation in Smooth"~italic("M.abscessus")),
+         x = "Concentration (uM)",
+         y= "Mean Absorbance at 562nm") +
+    scale_fill_manual(values = drug_colors[i])  # Assign a unique color to each drug
+  
+  # Save the plot as an image file (adjust the filename as needed)
+  ggsave(filename = paste0(drug, "_smooth_plot.png"), plot = p, width = 9, height = 6, units = "in")
+}
+  
+```
+
+Now I am doing the same thing again but for the rough morphotype
+```{r}
+# Filter the data
+filtered_data <- summary_mabs_rough %>% 
+  filter(Drug != "uninf")
+
+# Get unique drugs
+unique_drugs <- unique(filtered_data$Drug)
+
+# Define a color palette with a different color for each drug
+drug_colors <- scales::hue_pal()(length(unique_drugs))
+
+# Create a Loop to generate individual plots for each drug
+for (i in seq_along(unique_drugs)) {
+  drug <- unique_drugs[i]  # Get the current drug
+  
+  # Subset data: select one of the drugs to make a plot for
+  drug_data <- filtered_data %>% 
+    filter(Drug == drug)
+  
+  # Plot for the current drug
+  p <- ggplot(drug_data, aes(x = as.factor(Concentration_uM), y = mean_A562, fill = Drug)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_errorbar(aes(ymin = mean_A562 - sd_A562, ymax = mean_A562 + sd_A562),
+                  width = 0.2, position = position_dodge(0.9)) +
+    facet_wrap(~Drug, scales = "free") +
+    theme_few() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = bquote("Effect of Ozonide Drug Treatment on Biofilm Formation in Rough "~italic("M.abscessus")),
+         x = "Concentration (uM)",
+         y= "Mean Absorbance at 562nm") +
+    scale_fill_manual(values = drug_colors[i])  # Assign a unique color to each drug
+  
+  # Save the plot as an image file (adjust the filename as needed)
+  ggsave(filename = paste0(drug, "_rough_plot.png"), plot = p, width = 9, height = 6, units = "in")
+}
+  
+```
+
