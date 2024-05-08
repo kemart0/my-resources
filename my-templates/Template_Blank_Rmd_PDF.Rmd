@@ -7,6 +7,16 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+#set the working directory for throughout the entire markdown file:
+knitr::opts_knit$set(root.dir = "")
 ```
 
 This is a blank template for starting an Rmarkdown file, it may or may not save time because you can just copy this file instead of deleting all the stuff about cars everytime.
+
+## Load the Libraries
+```{r}
+#some common libraries
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+```
