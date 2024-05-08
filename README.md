@@ -1,7 +1,5 @@
 # my-resources
 
-[My LinkedIn](https://www.linkedin.com/in/kelsey-e-martin/)
-
 ## Useful links for R
 
 [Colorblind accessible color palettes for R](https://cran.r-project.org/web/packages/colorBlindness/vignettes/colorBlindness.html)
