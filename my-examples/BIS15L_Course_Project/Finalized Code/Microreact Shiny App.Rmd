@@ -1,0 +1,130 @@
+---
+title: "Microreact Shiny App"
+author: "Kelsey Martin"
+date: "3/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Libraries
+
+```{r}
+library(readr)
+library(tidyverse)
+library(janitor)
+library(ggthemes)
+library(shiny)
+library(shinydashboard)
+library(paletteer)
+```
+## The Data:
+```{r}
+microreact<- read_csv("../Data/microreact_isolates.csv")
+microreact <- janitor::clean_names(microreact)
+```
+
+```{r}
+#Here I am adding a column that codes for type of drug resistance
+
+microreact_drug_resistance <- microreact %>% 
+  mutate( drug_resistance = case_when(
+    fcz=="Not_Resistant"& mcf=="Not_Resistant"& amb=="Not_Resistant" ~ "NR",
+    fcz=="Resistant"& mcf=="Not_Resistant"& amb=="Not_Resistant" ~ "FCZ",
+    fcz=="Not_Resistant" & mcf=="Resistant" & amb=="Not_Resistant" ~ "MCF",
+    fcz=="Not_Resistant" & mcf=="Not_Resistant" & amb=="Resistant" ~ "AMB",
+    
+    fcz=="Resistant"& mcf=="Resistant"& amb=="Not_Resistant" ~ "MDR",
+    fcz=="Resistant"& mcf=="Not_Resistant"& amb=="Resistant" ~ "MDR",
+    fcz=="Not_Resistant"& mcf=="Resistant"& amb=="Resistant" ~ "MDR",
+    
+    fcz=="Resistant"& mcf=="Resistant"& amb=="Resistant" ~ "XDR"
+    
+    
+    
+  ))
+```
+
+```{r}
+#Here I am adding another column that codes for presence or absence of known drug resistance genes
+
+microreact_drug_resistance <- microreact_drug_resistance %>% 
+  mutate( amr_gene = case_when(
+    erg11 != "WT" & fks1=="WT" ~ "ERG11",
+    fks1 !="WT"& erg11 == "WT" ~ "FKS1",
+    erg11 != "WT" & fks1 !="WT" ~ "ERG11 & FKS1",
+    fks1 =="WT" & erg11 == "WT" ~ "No AMR genes"
+    
+    
+))
+
+```
+
+
+
+```{r}
+case_counts <- microreact_drug_resistance %>% 
+  count(country, year, amr_gene, drug_resistance) %>% 
+  mutate(year=as.factor(year)) %>% 
+  print()
+```
+
+## My Palette
+
+```{r}
+colors <- paletteer::palettes_d_names
+my_palette <- paletteer_d("calecopal::kelp2")
+```
+
+
+##Shiny App:
+
+-  Look at case counts per year by country?
+
+
+```{r working shiny app}
+library(shiny)
+
+ui <- dashboardPage( 
+  dashboardHeader(title = "Case Counts per Year by Country"),
+  dashboardSidebar(disable = T),
+  dashboardBody(
+  fluidRow(
+  box(title = "Plot Options", width = 3,
+  selectInput("country",
+              " Select Country",
+              choices=unique(case_counts$country)), 
+              selected = "United States"),
+  radioButtons("x", 
+                             "Select Fill Variable", 
+                             choices=c("amr_gene", "drug_resistance"), selected = "drug_resistance"),
+  
+  ), # close the first box
+  box(title = "Case Count", width = 7,
+  plotOutput("plot", width = "400px", height = "300px")
+  ) # close the second box
+  ) # close the row
+  ) # close the dashboard body
+ # close the ui
+
+server <- function(input, output, session) { 
+  output$plot <- renderPlot({
+    case_counts %>% 
+      filter(country==input$country) %>%
+  ggplot(aes_string(x = "year", y="n", fill=input$x)) +
+      geom_col() + 
+      theme_classic()+
+       scale_fill_manual(values = my_palette)+
+      labs(x="Year")
+  })
+  session$onSessionEnded(stopApp)
+  }
+
+shinyApp(ui, server)
+```
+
+
+
+
